@@ -1,6 +1,6 @@
 import os
 from typing import List
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from dotenv import load_dotenv
@@ -10,6 +10,7 @@ load_dotenv()
 
 # --- FastAPI app + CORS ---
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],      # tighten in prod
@@ -27,6 +28,7 @@ client = OpenAI(api_key=api_key)
 # --- Schemas ---
 class Message(BaseModel):
     role: str  # "system" | "user" | "assistant"
+
     content: str
 
     @field_validator("role")
@@ -43,15 +45,18 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
 
-# --- Routes ---
-@app.get("/health")
+# --- Router ---
+api_router = APIRouter(prefix="/api")  # <-- all routes will have /api
+
+@api_router.get("/health")
 def health():
     return {"ok": True}
 
-@app.post("/chat/", response_model=ChatResponse)
+@api_router.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
     # Ensure there is a system message; add a default if missing
     msgs = [{"role": m.role, "content": m.content} for m in req.messages]
+    print(msgs)
     if not any(m["role"] == "system" for m in msgs):
         msgs.insert(0, {
             "role": "system",
@@ -66,3 +71,6 @@ def chat(req: ChatRequest):
     )
     reply = resp.choices[0].message.content
     return {"reply": reply}
+
+# --- Include router ---
+app.include_router(api_router)
